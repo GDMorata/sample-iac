@@ -59,7 +59,7 @@ jobs:
     needs: 
       - semgrep
     steps:
-      - name: 'Install FOSSA CLI'
+      - name: Install FOSSA CLI
         run: curl -L https://github.com/fossas/fossa-cli/releases/latest/download/fossa-linux-amd64 -o fossa && chmod +x fossa
   
       - name: 'Run FOSSA Scan and Output SARIF'
