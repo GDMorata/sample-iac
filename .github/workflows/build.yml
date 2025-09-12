@@ -155,3 +155,20 @@ jobs:
         if: always()
 
         run: docker rm -f aut || true
+
+  fossa-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v2
+ 
+      - name: 'Run FOSSA Scan'
+        uses: fossas/fossa-action@v1
+        with:
+          api-key: ${{secrets.fossaApiKey}}
+ 
+      - name: 'Run FOSSA Test'
+        uses: fossas/fossa-action@v1
+        with:
+          api-key: ${{secrets.fossaApiKey}}
+          run-tests: true
