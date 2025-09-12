@@ -59,6 +59,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      security-events: write
 
   terrascan:
     runs-on: ubuntu-latest
