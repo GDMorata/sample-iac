@@ -59,9 +59,6 @@ jobs:
     needs: 
       - semgrep
     steps:
-      - name: 'Checkout Code'
-        uses: actions/checkout@v2
-  
       - name: 'Install FOSSA CLI'
         run: curl -L https://github.com/fossas/fossa-cli/releases/latest/download/fossa-linux-amd64 -o fossa && chmod +x fossa
   
@@ -70,7 +67,7 @@ jobs:
           FOSSA_API_KEY: ${{ secrets.fossaApiKey }}
         run: |
           ./fossa analyze --output-format sarif > fossa-results.sarif
-  
+
       - name: 'Upload FOSSA SARIF Artifact'
         uses: actions/upload-artifact@v4
         with:
