@@ -57,20 +57,25 @@ jobs:
   fossa-sca:
     runs-on: ubuntu-latest
     needs: 
-        - semgrep
+      - semgrep
     steps:
       - name: 'Checkout Code'
         uses: actions/checkout@v2
- 
-      - name: 'Run FOSSA Scan'
-        uses: fossas/fossa-action@v1
+  
+      - name: 'Install FOSSA CLI'
+        run: curl -L https://github.com/fossas/fossa-cli/releases/latest/download/fossa-linux-amd64 -o fossa && chmod +x fossa
+  
+      - name: 'Run FOSSA Scan and Output SARIF'
+        env:
+          FOSSA_API_KEY: ${{ secrets.fossaApiKey }}
+        run: |
+          ./fossa analyze --output-format sarif > fossa-results.sarif
+  
+      - name: 'Upload FOSSA SARIF Artifact'
+        uses: actions/upload-artifact@v4
         with:
-          api-key: ${{secrets.fossaApiKey}}
-          
-      - uses: actions/upload-artifact@v4
-        with:
-          name: fossa.debug.json.gz
-          path: ./fossa.debug.json.gz
+          name: fossa-results.sarif
+          path: fossa-results.sarif
 
   terrascan:
     runs-on: ubuntu-latest
