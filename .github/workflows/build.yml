@@ -57,14 +57,11 @@ jobs:
   trivy-scan:
     runs-on: ubuntu-latest
     if: always()
-    needs: 
-      - semgrep
-      - terrascan
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Gitleaks
+      - name: Run Trivy
         uses: t-kolev/Continuous-SCA-Scanning/.github/workflows/trivy.yaml@main
 
       - name: Upload Trivy scan results to GitHub Security tab
