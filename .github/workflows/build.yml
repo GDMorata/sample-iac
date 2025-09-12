@@ -55,24 +55,32 @@ jobs:
             semgrep-junit.xml
             
   fossa-sca:
-    runs-on: ubuntu-latest
-    needs: 
-      - semgrep
-    steps:
-      - name: Install FOSSA CLI
-        run: curl -L https://github.com/fossas/fossa-cli/releases/latest/download/fossa-linux-amd64 -o fossa && chmod +x fossa
-  
-      - name: 'Run FOSSA Scan and Output SARIF'
-        env:
-          FOSSA_API_KEY: ${{ secrets.fossaApiKey }}
-        run: |
-          ./fossa analyze --output-format sarif > fossa-results.sarif
+      runs-on: ubuntu-latest
+      needs: 
+        - semgrep
+      steps:
+        - name: Install FOSSA CLI
+          run: |
+            curl -L https://github.com/fossas/fossa-cli/releases/latest/download/fossa-linux-amd64 -o fossa && chmod +x fossa
+    
+        - name: Verify FOSSA CLI Installation
+          run: |
+            ls -l fossa
+            ./fossa --version
+    
+        - name: 'Run FOSSA Scan and Output SARIF'
+          env:
+            FOSSA_API_KEY: ${{ secrets.fossaApiKey }}
+          run: |
+            ./fossa analyze --output-format sarif > fossa-results.sarif
+    
+        - name: 'Upload FOSSA SARIF Artifact'
+          uses: actions/upload-artifact@v4
+          with:
+            name: fossa-results.sarif
+            path: fossa-results.sarif
+      
 
-      - name: 'Upload FOSSA SARIF Artifact'
-        uses: actions/upload-artifact@v4
-        with:
-          name: fossa-results.sarif
-          path: fossa-results.sarif
 
   terrascan:
     runs-on: ubuntu-latest
