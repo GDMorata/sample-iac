@@ -57,10 +57,7 @@ jobs:
   fossa-sca:
     runs-on: ubuntu-latest
     needs: 
-        - gitleaks
         - semgrep
-        - terrascan
-        - zap
     steps:
       - name: 'Checkout Code'
         uses: actions/checkout@v2
@@ -122,10 +119,10 @@ jobs:
     runs-on: ubuntu-latest
     if: always() # -- will proceed kahit nag fail si gitleaks
     needs: 
-        - gitleaks
         - semgrep
         - terrascan
         - fossa-sca
+        - gitleaks
 
     steps:
       - name: Checkout repo
