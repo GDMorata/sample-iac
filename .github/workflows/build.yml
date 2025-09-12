@@ -54,6 +54,24 @@ jobs:
             semgrep.sarif
             semgrep-junit.xml
 
+  trivy-scan:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: 
+      - semgrep
+      - terrascan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Gitleaks
+        uses: t-kolev/Continuous-SCA-Scanning/.github/workflows/trivy.yaml@main
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
   terrascan:
     runs-on: ubuntu-latest
     name: terrascan-action
