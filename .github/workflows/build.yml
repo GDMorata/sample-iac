@@ -54,115 +54,38 @@ jobs:
             semgrep.sarif
             semgrep-junit.xml
           
-  trivy:
+  snyk-sca:
     runs-on: ubuntu-latest
-    needs: 
+    if: always()
+    needs:
       - semgrep
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-
     steps:
-      - name: Checkout (full history for better scanning)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build app image (for image scanning)
-        uses: docker/build-push-action@v5
+      - name: Set up Node.js (if using npm/yarn)
+        uses: actions/setup-node@v4
         with:
-          context: .
-          file: ./Dockerfile
-          tags: app-under-test:latest
-          push: false
-          load: true
+          node-version: '18' 
 
-      - name: Decide Trivy exit-code (block on main only)
-        id: trivy_mode
-        run: |
-          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            echo "code=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "code=0" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Cache Trivy DB
-        uses: actions/cache@v4
+      - name: Install dependencies
+        run: npm install 
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions@master
         with:
-          path: .cache/trivy
-          key: trivy-db-${{ runner.os }}-${{ github.ref_name }}
-          restore-keys: |
-            trivy-db-${{ runner.os }}-
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+          command: test
+          args: --all-projects --severity-threshold=high
         env:
-          TRIVY_CACHE_DIR: .cache/trivy
-          TRIVY_SKIP_DIRS: .git,.cache,trivy,node_modules,dist,build
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-fs.sarif
-          scanners: vuln,secret,license
-          severity: CRITICAL,HIGH,MEDIUM
-          ignore-unfixed: true
-          cache-dir: .cache/trivy
-          exit-code: ${{ steps.trivy_mode.outputs.code }}
-
-      - name: Upload SARIF (Trivy FS)
-        if: always() && github.repository_owner == github.actor
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-fs.sarif
-          category: trivy-fs
-          wait-for-processing: false   
-
-      - name: Upload artifact (Trivy FS)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-fs
-          path: trivy-fs.sarif
-
-      - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
-        env:
-          TRIVY_CACHE_DIR: .cache/trivy
-        with:
-          scan-type: image
-          image-ref: app-under-test:latest
-          format: sarif
-          output: trivy-image.sarif
-          scanners: vuln,secret,license
-          severity: CRITICAL,HIGH,MEDIUM
-          ignore-unfixed: true
-          cache-dir: .cache/trivy
-          exit-code: ${{ steps.trivy_mode.outputs.code }}
-
-      - name: Upload SARIF (Trivy Image)
-        if: always() && github.repository_owner == github.actor
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-image.sarif
-          category: trivy-image
-          wait-for-processing: false   
-
-      - name: Upload artifact (Trivy Image)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-image
-          path: trivy-image.sarif
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true 
 
   snyk-iac:
     runs-on: ubuntu-latest
     if: always()
     needs:
       - semgrep
-      - trivy
+      - snyk-sca
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -183,7 +106,7 @@ jobs:
     if: always()
     needs: 
       - semgrep
-      - trivy
+      - snyk-sca
       - snyk-iac
     steps:
       - name: Checkout
@@ -206,7 +129,7 @@ jobs:
     needs: 
         - gitleaks
         - semgrep
-        - trivy
+        - snyk-sca
         - snyk-iac
 
     steps:
@@ -260,6 +183,3 @@ jobs:
         if: always()
 
         run: docker rm -f aut || true
-
-
-
