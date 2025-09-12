@@ -75,6 +75,9 @@ jobs:
   terrascan:
     runs-on: ubuntu-latest
     name: terrascan-action
+    needs:
+      - semgrep
+      - fossa-sca
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -98,8 +101,8 @@ jobs:
     if: always()
     needs: 
       - semgrep
-      - terrascan
       - fossa-sca
+      - terrascan
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -120,8 +123,8 @@ jobs:
     if: always() # -- will proceed kahit nag fail si gitleaks
     needs: 
         - semgrep
-        - terrascan
         - fossa-sca
+        - terrascan
         - gitleaks
 
     steps:
