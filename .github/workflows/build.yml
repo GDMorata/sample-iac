@@ -156,8 +156,13 @@ jobs:
 
         run: docker rm -f aut || true
 
-  fossa-scan:
+  fossa-sca:
     runs-on: ubuntu-latest
+    needs: 
+        - gitleaks
+        - semgrep
+        - terrascan
+        - zap
     steps:
       - name: 'Checkout Code'
         uses: actions/checkout@v2
@@ -166,9 +171,9 @@ jobs:
         uses: fossas/fossa-action@v1
         with:
           api-key: ${{secrets.fossaApiKey}}
- 
-      - name: 'Run FOSSA Test'
-        uses: fossas/fossa-action@v1
+          
+      - uses: actions/upload-artifact@v3
         with:
-          api-key: ${{secrets.fossaApiKey}}
-          run-tests: true
+          name: fossa.debug.json.gz
+          path: ./fossa.debug.json.gz
+      
