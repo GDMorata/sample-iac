@@ -106,7 +106,7 @@ jobs:
         - name: Checkout repository
           uses: actions/checkout@v3
           with:
-            token: ${{ secrets.PAT_TOKEN }}
+            token: ${{ secrets.GH_TOKEN }}
   
         - name: Run Checkov scan
           uses: bridgecrewio/checkov-action@master
