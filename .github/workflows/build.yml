@@ -16,6 +16,7 @@ concurrency:
 jobs:
   semgrep:
     runs-on: ubuntu-latest
+    name: Semgrep SAST
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,12 +55,14 @@ jobs:
             semgrep.sarif
             semgrep-junit.xml
 
-  Trivy-Scan:
+  trivy-scan:
     permissions:
       contents: read 
       security-events: write 
       actions: read
-    name: Build
+    name: Trivy SCA
+    needs:
+      - semgrep
     runs-on: "ubuntu-latest"
     steps:
       - name: Checkout code
@@ -95,9 +98,10 @@ jobs:
 
   terrascan:
     runs-on: ubuntu-latest
-    name: terrascan-action
+    name: Terrascan IaC
     needs:
       - semgrep
+      - trivy-scan
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -118,10 +122,12 @@ jobs:
  
   gitleaks:
     runs-on: ubuntu-latest
+    name: GitLeaks Secret Scan
     if: always()
     needs: 
       - semgrep
       - terrascan
+      - trivy-scan
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -137,13 +143,14 @@ jobs:
           sarif_file: gitleaks.sarif
 
   zap:
-    name: ZAP
+    name: ZAP DAST
     runs-on: ubuntu-latest
     if: always() # -- will proceed kahit nag fail si gitleaks
     needs: 
         - semgrep
         - terrascan
         - gitleaks
+        - trivy-scan
 
     steps:
       - name: Checkout repo
