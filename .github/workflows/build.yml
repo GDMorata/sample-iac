@@ -99,10 +99,14 @@ jobs:
   checkov:
       name: Checkov IaC
       runs-on: ubuntu-latest
-  
+      needs:
+          - semgrep
+          - trivy-scan
       steps:
         - name: Checkout repository
           uses: actions/checkout@v3
+          with:
+            token: ${{ secrets.PAT_TOKEN }}
   
         - name: Run Checkov scan
           uses: bridgecrewio/checkov-action@master
