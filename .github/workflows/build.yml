@@ -114,7 +114,7 @@ jobs:
             directory: .                         
             output_format: sarif
             output_file_path: results/checkov.sarif
-            soft_fail: false                      
+            # soft_fail: false                      
             download_external_modules: true        
   
         - name: Upload SARIF to GitHub Code Scanning
