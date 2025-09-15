@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
 
-  analyze:
+  code-ql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
     permissions:
@@ -62,6 +62,8 @@ jobs:
   semgrep:
     runs-on: ubuntu-latest
     name: Semgrep SAST
+    needs: 
+      - code-ql
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,6 +110,7 @@ jobs:
     name: Trivy SCA
     needs:
       - semgrep
+      - code-ql
     runs-on: "ubuntu-latest"
     steps:
       - name: Checkout code
@@ -147,6 +150,7 @@ jobs:
       needs:
           - semgrep
           - trivy-scan
+          - code-ql
       steps:
         - name: Checkout repository
           uses: actions/checkout@v3
@@ -175,6 +179,7 @@ jobs:
       - semgrep
       - checkov
       - trivy-scan
+      - code-ql
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -198,7 +203,7 @@ jobs:
         - checkov
         - gitleaks
         - trivy-scan
-
+        - code-ql
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
