@@ -107,7 +107,7 @@ jobs:
       uses: actions/checkout@v2
     - name: Run Terrascan
       id: terrascan
-      uses: tenable/terrascan-action@main
+      uses: tenable/terrascan-action@v1.4.1
       with:
         iac_type: 'terraform'
         iac_version: 'v14'
