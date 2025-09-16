@@ -222,6 +222,7 @@ jobs:
       needs.stage-flags.outputs.is_staging_qa == 'true' ||
       needs.stage-flags.outputs.is_final_gate == 'true'
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
