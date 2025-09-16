@@ -309,3 +309,15 @@ jobs:
         run: |
           echo "Production stage: no scans (gates already passed in PR to main)."
           echo "Trigger your deployment steps here."
+
+  dev-deploy:
+    name: Deploy to Dev
+    needs: 
+      - gitleaks
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/') }}
+    runs-on: ubuntu-latest
+    environment: Dev
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Deploying to Dev…"
+
