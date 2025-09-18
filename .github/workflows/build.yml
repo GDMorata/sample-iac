@@ -1,69 +1,106 @@
 name: Main Pipeline
-
+# test run #4
 on:
-  push
+  push:
+    branches:
+      - main
+      - 'feature/*'     
+  pull_request:
+    branches:
+      - dev          
+      - main          
 
 permissions:
   contents: read
   packages: read
   statuses: write
   security-events: write
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-
+  stage-flags:
+    runs-on: ubuntu-latest
+    outputs:
+      is_dev_testing: ${{ steps.flags.outputs.is_dev_testing }}
+      is_staging_qa: ${{ steps.flags.outputs.is_staging_qa }}
+      is_final_gate: ${{ steps.flags.outputs.is_final_gate }}
+      is_production: ${{ steps.flags.outputs.is_production }}
+    steps:
+      - id: flags
+        run: |
+          echo "is_dev_testing=false"  >> $GITHUB_OUTPUT
+          echo "is_staging_qa=false"   >> $GITHUB_OUTPUT
+          echo "is_final_gate=false"   >> $GITHUB_OUTPUT
+          echo "is_production=false"   >> $GITHUB_OUTPUT
+          # Dev Testing: push to feature/*
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/heads/feature/* ]]; then
+            echo "is_dev_testing=true" >> $GITHUB_OUTPUT
+          fi
+          # Staging QA: PR -> dev
+          if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.base_ref }}" == "dev" ]]; then
+            echo "is_staging_qa=true"  >> $GITHUB_OUTPUT
+          fi
+          # Final Gate: PR -> main
+          if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.base_ref }}" == "main" ]]; then
+            echo "is_final_gate=true"  >> $GITHUB_OUTPUT
+          fi
+          # Production: push to main (post-merge)
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "is_production=true"  >> $GITHUB_OUTPUT
+          fi
   code-ql:
     name: CodeQL Analysis
+    needs: [stage-flags]
+    if: |
+      needs.stage-flags.outputs.is_dev_testing == 'true' ||
+      needs.stage-flags.outputs.is_staging_qa == 'true' ||
+      needs.stage-flags.outputs.is_final_gate == 'true'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       packages: read
       actions: read
       contents: read
-
     strategy:
       fail-fast: false
       matrix:
         include:
-        - language: actions
-          build-mode: none
-        - language: javascript-typescript
-          build-mode: none
-       
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ matrix.language }}
-        build-mode: ${{ matrix.build-mode }}
-       
-    - if: matrix.build-mode == 'manual'
-      shell: bash
-      run: |
-        echo 'If you are using a "manual" build mode for one or more of the' \
-          'languages you are analyzing, replace this with the commands to build' \
-          'your code, for example:'
-        echo '  make bootstrap'
-        echo '  make release'
-        exit 1
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        category: "/language:${{matrix.language}}"
-
+      - if: matrix.build-mode == 'manual'
+        shell: bash
+        run: |
+          echo "Manual build mode is not configured."
+          exit 1
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
 
   semgrep:
-    runs-on: ubuntu-latest
     name: Semgrep SAST
-    needs: 
-      - code-ql
+    needs: [stage-flags, code-ql]
+    if: |
+      needs.stage-flags.outputs.is_dev_testing == 'true' ||
+      needs.stage-flags.outputs.is_staging_qa == 'true' ||
+      needs.stage-flags.outputs.is_final_gate == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,9 +112,8 @@ jobs:
 
       - name: Upgrade pip & install Semgrep
         run: |
-          python -m pip install --upgrade pip 
+          python -m pip install --upgrade pip
           pip install semgrep
-
       - name: Run Semgrep
         run: semgrep --config auto --error || true
 
@@ -92,7 +128,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
-        
+
       - name: Upload Semgrep artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -101,85 +137,85 @@ jobs:
             semgrep.json
             semgrep.sarif
             semgrep-junit.xml
-
   trivy-scan:
-    permissions:
-      contents: read 
-      security-events: write 
-      actions: read
     name: Trivy SCA
-    needs:
-      - semgrep
-      - code-ql
-    runs-on: "ubuntu-latest"
+    needs: [stage-flags, code-ql, semgrep]
+    if: |
+      needs.stage-flags.outputs.is_dev_testing == 'true' ||
+      needs.stage-flags.outputs.is_staging_qa == 'true' ||
+      needs.stage-flags.outputs.is_final_gate == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-        
-      - name: Running a scan with a sarif file as an output
+        uses: actions/checkout@v4
+
+      - name: Trivy SARIF
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          format: 'template'
+          scan-type: fs
+          format: template
           template: '@/contrib/sarif.tpl'
-          output: 'trivy-results.sarif'
-          severity: 'LOW,MEDIUM,CRITICAL,HIGH'
-          
-      - name: Running a scan with a json file as an output
+          output: trivy-results.sarif
+          severity: LOW,MEDIUM,CRITICAL,HIGH
+
+      - name: Trivy JSON
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          format: 'json'
-          output: 'trivy-results.json'
-          severity: 'LOW,MEDIUM,CRITICAL,HIGH'
-          
-      - name: Save the json vulnerability report to an artifact
+          scan-type: fs
+          format: json
+          output: trivy-results.json
+          severity: LOW,MEDIUM,CRITICAL,HIGH
+
+      - name: Upload Trivy JSON
         uses: actions/upload-artifact@v4
         with:
           name: trivy-results
-          path: ./trivy-results.json
-          
-      - name: Upload Trivy scan results to GitHub Security tab
+          path: trivy-results.json
+
+      - name: Upload Trivy SARIF to Code Scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: trivy-results.sarif
 
   checkov:
-      name: Checkov IaC
-      runs-on: ubuntu-latest
-      needs:
-          - semgrep
-          - trivy-scan
-          - code-ql
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v3
-          with:
-            token: ${{ secrets.GH_TOKEN }}
-  
-        - name: Run Checkov scan
-          uses: bridgecrewio/checkov-action@master
-          with:
-            directory: .                         
-            output_format: sarif
-            output_file_path: results/checkov.sarif
-            soft_fail: true                      
-            download_external_modules: true        
-  
-        - name: Upload SARIF to GitHub Code Scanning
-          uses: github/codeql-action/upload-sarif@v3
-          with:
-            sarif_file: results/checkov.sarif
- 
-  gitleaks:
+    name: Checkov IaC
+    needs: [stage-flags, code-ql, semgrep, trivy-scan]
+    if: |
+      needs.stage-flags.outputs.is_dev_testing == 'true' ||
+      needs.stage-flags.outputs.is_staging_qa == 'true' ||
+      needs.stage-flags.outputs.is_final_gate == 'true'
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Checkov scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          output_format: sarif
+          output_file_path: results/checkov.sarif
+          soft_fail: true
+          download_external_modules: true
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results/checkov.sarif
+
+  gitleaks:
     name: GitLeaks Secret Scan
-    if: always()
-    needs: 
-      - semgrep
-      - checkov
-      - trivy-scan
-      - code-ql
+    needs: [stage-flags, code-ql, semgrep, trivy-scan, checkov]
+    if: |
+      needs.stage-flags.outputs.is_dev_testing == 'true' ||
+      needs.stage-flags.outputs.is_staging_qa == 'true' ||
+      needs.stage-flags.outputs.is_final_gate == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -187,23 +223,15 @@ jobs:
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
+          GITHUB_TOKEN: ${{ github.token }}          
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE_KEY }}
 
-      - name: Upload Gitleaks SARIF to Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: gitleaks.sarif
 
   zap:
     name: ZAP DAST
+    needs: [stage-flags, code-ql, semgrep, trivy-scan, checkov, gitleaks]
+    if: needs.stage-flags.outputs.is_final_gate == 'true'
     runs-on: ubuntu-latest
-    if: always() # -- will proceed kahit nag fail si gitleaks
-    needs: 
-        - semgrep
-        - checkov
-        - gitleaks
-        - trivy-scan
-        - code-ql
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -242,6 +270,7 @@ jobs:
           target: 'http://localhost:8080'
           cmd_options: '-r zap_report.html -w zap_report.md -J zap_report.json'
 
+
       - name: Upload ZAP reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -253,7 +282,57 @@ jobs:
             zap_report.json
       - name: Cleanup
         if: always()
-
         run: docker rm -f aut || true
 
-      
+  production:
+    name: Production Deploy
+    needs: [stage-flags]
+    if: needs.stage-flags.outputs.is_production == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notice
+        run: |
+          echo "Production stage: no scans (gates already passed in PR to main)."
+          echo "Trigger your deployment steps here."
+  dev-deploy:
+    name: Deploy to Dev
+    needs: 
+      - gitleaks
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/') }}
+    runs-on: ubuntu-latest
+    environment: Dev
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Deploying to Dev…"
+
+  open-pr-to-dev:
+      name: Open PR to dev
+      needs: 
+        - dev-deploy        
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/') }}
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+        pull-requests: write
+      steps:
+        - name: Create PR to dev (if none exists)
+          uses: actions/github-script@v7
+          with:
+            script: |
+              const head = context.ref.replace('refs/heads/',''); // e.g., feature/test
+              const base = 'dev';
+              const { owner, repo } = context.repo;
+              // Is there already an open PR head->dev?
+              const existing = await github.paginate(
+                github.rest.pulls.list, { owner, repo, state: 'open', head: `${owner}:${head}`, base }
+              );
+              if (existing.length) {
+                core.info(`PR already exists: #${existing[0].number}`);
+                return;
+              }
+              const title = `feat: ${head.startsWith('feature/') ? head.slice(8) : head} → dev`;
+              const body  = `Automated PR from \`${head}\` into \`${base}\`.`;
+              const pr = await github.rest.pulls.create({ owner, repo, head, base, title, body, draft: true });
+              core.info(`Created PR #${pr.data.number}`);
+              // Optional label
+              await github.rest.issues.addLabels({ owner, repo, issue_number: pr.data.number, labels: ['auto-pr'] });
